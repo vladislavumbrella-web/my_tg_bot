@@ -14,7 +14,7 @@ from datetime import datetime, timedelta
 
 router = Router()
 
-DB_NAME = 'birthday.db'
+DB_NAME = '/data/birthday.db'
 
 
 async def check_daily_birthdays(bot: Bot):
