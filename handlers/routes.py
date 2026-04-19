@@ -211,7 +211,7 @@ async def show_stats(message: Message):
         cursor = await db.execute('SELECT tg_id, username, full_name FROM users')
         users = await cursor.fetchall()
     if not users:
-        await message.answer("Поки що ніхто не запускав бота.")
+        await message.answer("Поки що ніхто не запускав бота")
         return
     text = "👤 <b>Користувачі бота:</b>\n\n"
     for tg_id, username, name in users:
