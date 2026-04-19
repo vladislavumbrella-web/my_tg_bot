@@ -28,7 +28,7 @@ async def main():
 
     scheduler.start()
 
-    print('Бот успішно запущений.')
+    print('Бот успішно запущений через SQLAlchemy.')
     
     try:
         await dp.start_polling(bot)
