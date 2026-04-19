@@ -21,8 +21,8 @@ async def main():
     scheduler.add_job(
         check_daily_birthdays,
         trigger='cron',
-        hour=14,
-        minute=17,
+        hour=9,
+        minute=0,
         args=[bot] 
     )
 
