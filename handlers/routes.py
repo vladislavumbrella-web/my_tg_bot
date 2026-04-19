@@ -134,7 +134,7 @@ async def reg(callback: CallbackQuery, state: FSMContext):
 async def process_name(message: Message, state: FSMContext):
     parts = message.text.strip().split()
     if len(parts) < 2:
-        await message.answer("⚠️ Потрібно ввести мінімум два слова (Ім'я та Прізвище).\nСпробуйте ще раз:")
+        await message.answer("⚠️ Потрібно ввести у форматі (Ім'я та Прізвище).\nСпробуйте ще раз:")
         return
     await state.update_data(name=message.text)
     await message.answer("📅 Тепер введіть дату народження у форматі <b>ДД-ММ-РРРР</b>", parse_mode="HTML")
