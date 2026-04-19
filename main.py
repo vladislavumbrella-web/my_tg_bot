@@ -22,7 +22,7 @@ async def main():
         check_daily_birthdays,
         trigger='cron',
         hour=18,
-        minute=41,
+        minute=44,
         args=[bot]
     )
 
