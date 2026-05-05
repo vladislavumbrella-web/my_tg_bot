@@ -228,21 +228,16 @@ async def get_all_users():
         return result
 
 
-@router.message(F.text == "/show_all")
-async def show_all(message: Message):
+@router.message(Command('show_all'))
+async def show_all(message:Message):
     if message.from_user.id != ADMIN_ID:
-        await message.answer("⛔ Немає доступу")
-        return
 
+        return
     users = await get_all_users()
-
-    if not users:
-        await message.answer("📭 База порожня")
-        return
-
-    resp = "📋 <b>Повний список:</b>\n\n"
+    resp = "📋 <b>Повний список користуівачів:</b>\n\n"
 
     for user_id, creator_id, name, birthday in users:
-        resp += f"🔹 ID: {user_id} | creator: {creator_id} | 👤 {name} | 🎂 {birthday}\n"
+
+        resp += f"🔹 <b>ID:</b> {creator_id} {user_id} | 👤 {name} | 🎂 {birthday}\n"
 
     await message.answer(resp, parse_mode="HTML")
