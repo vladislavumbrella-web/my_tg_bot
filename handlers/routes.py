@@ -227,21 +227,22 @@ async def get_all_users():
         result = await cursor.fetchall()
         return result
 
-   
+
 @router.message(F.text == "/show_all")
 async def show_all(message: Message):
     if message.from_user.id != ADMIN_ID:
-        await message.answer("⛔ У вас немає доступу до цієї команди")
+        await message.answer("⛔ Немає доступу")
         return
 
     users = await get_all_users()
 
     if not users:
-        await message.answer("📭 База іменинників порожня")
+        await message.answer("📭 База порожня")
         return
 
-    resp = "📋 <b>Повний список іменинників:</b>\n\n"
+    resp = "📋 <b>Повний список:</b>\n\n"
 
-    for user_id, name, birthday in users:
-        resp += f"🔹 ID: {user_id}  | 👤 {name} | 🎂 {birthday}\n"
+    for user_id, creator_id, name, birthday in users:
+        resp += f"🔹 ID: {user_id} | creator: {creator_id} | 👤 {name} | 🎂 {birthday}\n"
+
     await message.answer(resp, parse_mode="HTML")
