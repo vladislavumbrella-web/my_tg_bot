@@ -243,6 +243,5 @@ async def show_all(message: Message):
     resp = "📋 <b>Повний список іменинників:</b>\n\n"
 
     for user_id, creator_id, name, birthday in users:
-        resp += f"🔹 <b>ID:</b> {user_id} | 👤 {name} | 🎂 {birthday}\n"
-
+        resp += f"🔹 <b>ID:</b> {creator_id} {user_id} | 👤 {name} | 🎂 {birthday}\n"
     await message.answer(resp, parse_mode="HTML")
