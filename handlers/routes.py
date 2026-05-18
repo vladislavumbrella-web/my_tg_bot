@@ -185,7 +185,6 @@ async def process_delete(message: Message, state: FSMContext):
         await state.clear()
     else:
         await message.answer("⚠️ <b>Запис не знайдено.</b>", parse_mode="HTML")
-        return
 
 
 @router.callback_query(lambda c: c.data == "show_users")
