@@ -17,28 +17,91 @@ router = Router()
 DB_NAME = '/data/birthday.db'
 
 
+def next_birthday_date(birthday, today):
+    def safe_date(year):
+        try:
+            return birthday.replace(year=year)
+        except ValueError:
+            return birthday.replace(year=year, day=28)
+
+    next_birthday = safe_date(today.year)
+
+    if next_birthday < today:
+        next_birthday = safe_date(today.year + 1)
+
+    return next_birthday
+
+
 async def check_daily_birthdays(bot: Bot):
     async with aiosqlite.connect(DB_NAME) as db:
-        now = datetime.now()
-        today_dm = now.strftime("%d-%m")
-        tomorrow_dm = (now + timedelta(days=1)).strftime("%d-%m")
-        in_2_days_dm = (now + timedelta(days=2)).strftime("%d-%m")
-        cursor = await db.execute('SELECT creator_id, name, birthday FROM birthdays')
+        cursor = await db.execute('''
+            SELECT birthdays.creator_id,
+                   birthdays.name,
+                   birthdays.birthday,
+                   users.reminder_days
+            FROM birthdays
+            LEFT JOIN users
+                ON birthdays.creator_id = users.tg_id
+        ''')
         users = await cursor.fetchall()
-        for creator_id, name, birthday_full in users:
-            bday_dm = birthday_full[:5]
-            if bday_dm == today_dm:
-                text = f"🥳 <b>СЬОГОДНІ!</b> День народження у <b>{name}</b>!\nНе забудь привітати! 🎉"
-            elif bday_dm == tomorrow_dm:
-                text = f"⏳ <b>НАГАДУВАННЯ:</b> Завтра день народження у <b>{name}</b> ({birthday_full})! 🎁"
-            elif bday_dm == in_2_days_dm:
-                text = f"⏳ <b>НАГАДУВАННЯ:</b> Через 2 дні день народження у <b>{name}</b> ({birthday_full})! 🎁"
+
+    today = datetime.now().date()
+
+    for creator_id, name, birthday_full, reminder_days in users:
+        try:
+            # Якщо налаштувань немає — залишаємо стару поведінку
+            if reminder_days is None:
+                selected_days = {0, 1, 2}
+            elif reminder_days == "":
+                selected_days = set()
             else:
+                selected_days = set(map(int, reminder_days.split(",")))
+
+            birthday = datetime.strptime(
+                birthday_full,
+                "%d-%m-%Y"
+            ).date()
+
+            days_left = (
+                next_birthday_date(birthday, today) - today
+            ).days
+
+            if days_left not in selected_days:
                 continue
-            try:
-                await bot.send_message(creator_id, text, parse_mode="HTML")
-            except Exception as e:
-                print(f"Помилка надсилання для {creator_id}: {e}")
+
+            if days_left == 0:
+                text = (
+                    f"🥳 <b>СЬОГОДНІ!</b> День народження "
+                    f"у <b>{name}</b>!\n"
+                    f"Не забудь привітати! 🎉"
+                )
+
+            elif days_left == 1:
+                text = (
+                    f"⏳ <b>НАГАДУВАННЯ:</b> Завтра день народження "
+                    f"у <b>{name}</b> ({birthday_full})! 🎁"
+                )
+
+            else:
+                word = "дні" if days_left in (2, 3, 4) else "днів"
+
+                text = (
+                    f"⏳ <b>НАГАДУВАННЯ:</b> Через {days_left} {word} "
+                    f"день народження у <b>{name}</b> "
+                    f"({birthday_full})! 🎁"
+                )
+
+            await bot.send_message(
+                creator_id,
+                text,
+                parse_mode="HTML"
+            )
+
+        except Exception as e:
+            print(
+                f"Помилка для {creator_id}, "
+                f"іменинник {name}: {e}"
+            )
 
 
 
@@ -47,10 +110,99 @@ def get_inline_keyboard():
         inline_keyboard=[
             [InlineKeyboardButton(text='➕ Додати іменинника', callback_data="register_user")],
             [InlineKeyboardButton(text='🗑️ Видалити запис', callback_data="delete_user")],
-            [InlineKeyboardButton(text='📋 Список усіх', callback_data="show_users")]
+            [InlineKeyboardButton(text='📋 Список усіх', callback_data="show_users")],
+            [InlineKeyboardButton(text='⚙️ Налаштування нагадувань', callback_data="reminder_settings")]
         ]
     )
     return keyboard
+
+
+async def get_reminder_days(tg_id: int):
+    async with aiosqlite.connect(DB_NAME) as db:
+        cursor = await db.execute(
+            "SELECT reminder_days FROM users WHERE tg_id = ?",
+            (tg_id,)
+        )
+        result = await cursor.fetchone()
+
+    if not result or result[0] is None:
+        return {0, 1, 2}
+
+    if result[0] == "":
+        return set()
+
+    return set(map(int, result[0].split(",")))
+
+
+def get_reminder_keyboard(selected_days):
+    options = [
+        (0, "У день народження"),
+        (1, "За 1 день"),
+        (2, "За 2 дні"),
+        (3, "За 3 дні"),
+        (7, "За 7 днів")
+    ]
+
+    buttons = []
+
+    for days, text in options:
+        icon = "✅" if days in selected_days else "⬜"
+
+        buttons.append([
+            InlineKeyboardButton(
+                text=f"{icon} {text}",
+                callback_data=f"reminder_{days}"
+            )
+        ])
+
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
+@router.callback_query(lambda c: c.data == "reminder_settings")
+async def reminder_settings(callback: CallbackQuery):
+    selected_days = await get_reminder_days(callback.from_user.id)
+
+    await callback.message.answer(
+        "🔔 <b>Коли нагадувати про день народження?</b>\n\n"
+        "Натисніть на потрібний варіант, щоб увімкнути або вимкнути його:",
+        reply_markup=get_reminder_keyboard(selected_days),
+        parse_mode="HTML"
+    )
+
+    await callback.answer()
+
+
+@router.callback_query(F.data.regexp(r"^reminder_\d+$"))
+async def toggle_reminder(callback: CallbackQuery):
+    await save_user(
+        tg_id=callback.from_user.id,
+        username=callback.from_user.username,
+        full_name=callback.from_user.full_name
+    )
+
+    day = int(callback.data.split("_")[1])
+    selected_days = await get_reminder_days(callback.from_user.id)
+
+    if day in selected_days:
+        selected_days.remove(day)
+    else:
+        selected_days.add(day)
+
+    reminder_days = ",".join(map(str, sorted(selected_days)))
+
+    async with aiosqlite.connect(DB_NAME) as db:
+        await db.execute(
+            "UPDATE users SET reminder_days = ? WHERE tg_id = ?",
+            (reminder_days, callback.from_user.id)
+        )
+        await db.commit()
+
+    await callback.message.edit_reply_markup(
+        reply_markup=get_reminder_keyboard(selected_days)
+    )
+
+    await callback.answer("Налаштування збережено ✅")
+
 
 
 @router.message(Command("start"))
@@ -75,14 +227,27 @@ async def init_db():
                 birthday TEXT NOT NULL
             )
         ''')
+
         await db.execute('''
             CREATE TABLE IF NOT EXISTS users (
                 tg_id INTEGER PRIMARY KEY,
                 username TEXT,
                 full_name TEXT,
-                first_seen TEXT
+                first_seen TEXT,
+                reminder_days TEXT DEFAULT '0,1,2'
             )
         ''')
+
+        # Якщо таблиця users вже існувала — додаємо нове поле
+        cursor = await db.execute("PRAGMA table_info(users)")
+        columns = await cursor.fetchall()
+        column_names = [column[1] for column in columns]
+
+        if "reminder_days" not in column_names:
+            await db.execute(
+                "ALTER TABLE users ADD COLUMN reminder_days TEXT DEFAULT '0,1,2'"
+            )
+
         await db.commit()
 
 async def save_user(tg_id: int, username: str, full_name: str):
@@ -118,12 +283,7 @@ async def get_users(creator_id: int):
     def days_until_birthday(user):
         birthday = datetime.strptime(user[2], "%d-%m-%Y").date()
 
-        next_birthday = birthday.replace(year=today.year)
-
-        if next_birthday < today:
-            next_birthday = birthday.replace(year=today.year + 1)
-
-        return (next_birthday - today).days
+        return (next_birthday_date(birthday, today) - today).days
 
     return sorted(result, key=days_until_birthday)
 
