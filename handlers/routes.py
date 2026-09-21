@@ -107,10 +107,25 @@ async def register_user(creator_id: int, name: str, birthday: str):
 
 async def get_users(creator_id: int):
     async with aiosqlite.connect(DB_NAME) as db:
-        cursor = await db.execute('SELECT user_id, name, birthday FROM birthdays WHERE creator_id = ?', (creator_id,))
+        cursor = await db.execute(
+            'SELECT user_id, name, birthday FROM birthdays WHERE creator_id = ?',
+            (creator_id,)
+        )
         result = await cursor.fetchall()
-        return result
 
+    today = datetime.now().date()
+
+    def days_until_birthday(user):
+        birthday = datetime.strptime(user[2], "%d-%m-%Y").date()
+
+        next_birthday = birthday.replace(year=today.year)
+
+        if next_birthday < today:
+            next_birthday = birthday.replace(year=today.year + 1)
+
+        return (next_birthday - today).days
+
+    return sorted(result, key=days_until_birthday)
 
 
 async def delete_user(user_id: int, creator_id: int):
